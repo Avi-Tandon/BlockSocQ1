@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Token Portfolio Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .token-list-container {
+            flex: 2;
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 20px;
+        }
+        .token-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .token {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        .token button {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .token button.sell {
+            background-color: #f44336;
+        }
+        .chart-container {
+            flex: 1;
+            position: sticky;
+            top: 20px;
+            max-height: 600px;
+        }
+        canvas {
+            width: 100%;
+            height: auto;
+        }
+        h1 {
+            text-align: center;
+        }
+        #totalValue {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .sort-container {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .sort-button {
+            padding: 5px 15px;
+            background-color: #008CBA;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            z-index: 1;
+        }
+        .dropdown-content a {
+            color: black;
+            padding: 12px 16px;
+            text-decoration: none;
+            display: block;
+        }
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        #chartCriteria {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="token-list-container">
+            <h1>Real-Time Token Portfolio Dashboard</h1>
+            <div class="sort-container">
+                <div class="dropdown">
+                    <button class="sort-button">Sort</button>
+                    <div class="dropdown-content">
+                        <a href="#" onclick="sortTokens('priceHighToLow')">Price: High to Low</a>
+                        <a href="#" onclick="sortTokens('priceLowToHigh')">Price: Low to High</a>
+                        <a href="#" onclick="sortTokens('balanceAsc')">Holding: Ascending</a>
+                        <a href="#" onclick="sortTokens('balanceDesc')">Holding: Descending</a>
+                    </div>
+                </div>
+            </div>
+            <div class="token-list" id="token-list">
+                <!-- Tokens will be dynamically generated here -->
+            </div>
+        </div>
+        <div class="chart-container">
+            <div id="chartCriteria">Current Chart Criteria: Based on Total Value</div>
+            <canvas id="portfolioChart"></canvas>
+            <div id="totalValue">Total Portfolio Value: $0.00</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Initial token data for 13 cryptocurrencies
+        const tokens = [
+            { name: "Bitcoin", balance: 2, value: 50000 },
+            { name: "Ethereum", balance: 5, value: 3500 },
+            { name: "Litecoin", balance: 10, value: 200 },
+            { name: "Ripple", balance: 1000, value: 1 },
+            { name: "Cardano", balance: 500, value: 2 },
+            { name: "Polkadot", balance: 100, value: 25 },
+            { name: "Binance Coin", balance: 20, value: 400 },
+            { name: "Dogecoin", balance: 1000, value: 0.1 },
+            { name: "Solana", balance: 15, value: 150 },
+            { name: "Chainlink", balance: 50, value: 30 },
+            { name: "Stellar", balance: 500, value: 0.3 },
+            { name: "Monero", balance: 10, value: 300 }
+        ];
+
+        let portfolioChart; // Variable to hold the chart instance
+        let currentCriteria = 'value'; // Default criteria
+
+        // Function to update the token list display
+        function updateTokenList() {
+            const tokenList = document.getElementById("token-list");
+            tokenList.innerHTML = "";
+
+            let totalPortfolioValue = 0;
+
+            tokens.forEach((token, index) => {
+                const totalValue = token.balance * token.value;
+                totalPortfolioValue += totalValue;
+
+                const tokenDiv = document.createElement("div");
+                tokenDiv.className = "token";
+                tokenDiv.innerHTML = `
+                    <div>
+                        <h3>${token.name}</h3>
+                        <p>Balance: ${token.balance}</p>
+                        <p>Current Value: $${token.value.toFixed(2)}</p>
+                        <p>Total Value: $${totalValue.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <button onclick="buyToken(${index})">Buy</button>
+                        <button class="sell" onclick="sellToken(${index})">Sell</button>
+                    </div>
+                `;
+                tokenList.appendChild(tokenDiv);
+            });
+
+            document.getElementById("totalValue").textContent = `Total Portfolio Value: $${totalPortfolioValue.toFixed(2)}`;
+
+            updateChart(); // Update the chart whenever the token list is updated
+        }
+
+        // Function to simulate buying a token
+        function buyToken(index) {
+            tokens[index].balance += 1;
+            updateTokenList();
+        }
+
+        // Function to simulate selling a token
+        function sellToken(index) {
+            if (tokens[index].balance > 0) {
+                tokens[index].balance -= 1;
+                updateTokenList();
+            } else {
+                alert("You don't have enough balance to sell.");
+            }
+        }
+
+        // Function to update the pie chart
+        function updateChart() {
+            const ctx = document.getElementById("portfolioChart").getContext("2d");
+            let chartData, chartLabels;
+
+            if (currentCriteria === 'value') {
+                chartData = tokens.map(token => token.balance * token.value);
+                chartLabels = tokens.map(token => token.name);
+                document.getElementById("chartCriteria").textContent = "Current Chart Criteria: Based on Total Value";
+            } else if (currentCriteria === 'balance') {
+                chartData = tokens.map(token => token.balance);
+                chartLabels = tokens.map(token => token.name);
+                document.getElementById("chartCriteria").textContent = "Current Chart Criteria: Based on Holdings";
+            }
+
+            if (portfolioChart) {
+                portfolioChart.destroy(); // Destroy the previous chart before creating a new one
+            }
+
+            portfolioChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        data: chartData,
+                        backgroundColor: ['#ff6384', '#36a2eb', '#cc65fe', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40', '#e7e9ed', '#76b7b2', '#b07aa1', '#f28e2b', '#59a14f', '#edc949'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                }
+            });
+        }
+
+        // Function to simulate real-time value updates
+        function simulateRealTimeUpdates() {
+            tokens.forEach(token => {
+                const change = (Math.random() * 2 - 1) * 0.05; // Random change between -5% and +5%
+                token.value += token.value * change;
+            });
+            updateTokenList(); // Update the token list and chart with new values
+        }
+
+        // Function to sort tokens based on different criteria
+        function sortTokens(criteria) {
+            if (criteria === 'priceHighToLow') {
+                tokens.sort((a, b) => b.value - a.value);
+                currentCriteria = 'value';
+            } else if (criteria === 'priceLowToHigh') {
+                tokens.sort((a, b) => a.value - b.value);
+                currentCriteria = 'value';
+            } else if (criteria === 'balanceAsc') {
+                tokens.sort((a, b) => a.balance - b.balance);
+                currentCriteria = 'balance';
+            } else if (criteria === 'balanceDesc') {
+                tokens.sort((a, b) => b.balance - a.balance);
+                currentCriteria = 'balance';
+            }
+
+            updateTokenList(); // Update the token list and chart after sorting
+        }
+
+        // Initialize the token list and chart
+        updateTokenList();
+
+        // Simulate real-time value updates every 5 seconds
+        setInterval(simulateRealTimeUpdates, 5000);
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
